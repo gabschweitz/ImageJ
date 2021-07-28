@@ -9,7 +9,7 @@ function CIJA(input, output, filename) //converts image to 8 bit, sets the image
 		run("Measure","Length");
 		len = getResult("Length");//gets line legnth to be used in the set scale analysis
 		selectWindow("Results"); 
-    run("Close");
+    		run("Close");
 		//print(len);
 		run("Set Scale...", "distance="+len+" known=1 unit=cm");//sets pixel to cm ratio
 				
