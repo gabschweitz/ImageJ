@@ -1,0 +1,103 @@
+function CIJA(input, output, filename) //converts image to 8 bit, sets the image scale based on the magnification specified by user, 
+									  //auto thresholds, inverts image, and analyzes particles. All calculations are based on IEST-STD-CC1246E
+
+	{
+		run ("Auto Threshold...");	
+		run("Select None");
+		setTool("Straightline");
+		waitForUser("Trace the line between point A and B on Micrometer for 1 Cm");//user must draw line
+		run("Measure","Length");
+		len = getResult("Length");//gets line legnth to be used in the set scale analysis
+		selectWindow("Results"); 
+    run("Close");
+		//print(len);
+		run("Set Scale...", "distance="+len+" known=1 unit=cm");//sets pixel to cm ratio
+				
+		name= getTitle();//get image name
+		selectWindow(name);
+		run("Select None");//clears any selections
+ 		setTool("Oval");
+		waitForUser("Select the Wafer");//outline the wafer
+		selectWindow(name);
+		run("Clear Outside");
+		run("Subtract Background...");//leaves only the wafer remaining
+		
+		run("8-bit");
+		run("Threshold");			
+		run("Analyze Particles...", "clear");
+		count = nResults(); //num particles is num of results
+		resultsArray=newArray();
+		for(i=0;i<count;i++) //for each particle retrieves the results from Analyze Particles function and adds it to the results array
+			{
+				resultsArray=Array.concat(resultsArray,getResult("Area",i));
+				covered = getResult("Area",i); //area covered is sum of area of each particle
+			}
+		Array.getStatistics(resultsArray,min,max,mean,stdDev);
+		avg = mean;
+		
+			setTool("Straightline");
+		run("Select None");
+		waitForUser("Trace the line between point A and B on widest part of the Wafer");//user must draw line
+		run("Measure","Length");
+		wafer = getResult("Length");//gets line legnth to be used in the area analysis	
+		radius=(wafer/2);
+		circle_area=(3.1415926535*((radius)*(radius)));	
+
+		PAC = 10*(covered/circle_area); //Percent area coverage is total area covered/circle area
+		covered = 0.1*covered; //adjusts area covered to fit units
+		clean = pow(10,(sqrt(((7.244+(0.43429*log(PAC)))/0.926)))); //calculates cleanliness level
+		result = newArray(circle_area,count,avg,covered,PAC,clean); //adds all the data to an arrray and returns it
+		return result;	
+		open(input + filename);
+	}
+
+macro "CIJA Action Tool - C059T3e16C"	
+	{
+	run("8-bit");
+	 //runs thresholder for the first image so user can adjust the threshold
+	input = getInfo("image.directory"); //gets image location
+	name = getInfo("image.filename"); //gets image filename
+	setBatchMode(true);
+	list = getFileList(input);
+	circle_area= newArray(list.length);
+	count= newArray(list.length);
+	avg= newArray(list.length);
+	area_covered= newArray(list.length);
+	PAC= newArray(list.length);
+	clean = newArray(list.length);
+	mag = newArray(list.length);
+    Dialog.create("CIJA"); //creates a window for user to enter magnification levels for each image and specify where to output data
+	Dialog.addMessage("Please fill out the fields below");
+	Dialog.addString("Enter output location (Ex. C:/Users/Gabrielle/Desktop/)","");
+	Dialog.addMessage("(Cannot be the same as image location)");
+	Dialog.addCheckbox("Process all images in current folder",false);
+	Dialog.show();
+	output = Dialog.getString();
+	all = Dialog.getCheckbox();
+	for(i=0;i<list.length;i++)
+		{
+		result = CIJA(input, output, list[i]); //runs CIJA function and puts output data into arrays for each parameter
+		circle_area[i] = result[0];
+		count[i] = result[1];
+		avg[i] = result[2];
+		area_covered[i] = result[3];
+		PAC[i] = result[4];
+		clean[i] = result[5];
+		if(all==false) //only processes first image if chosen
+			{
+				i=list.length;
+			}
+		}	
+	setBatchMode(false);
+	Table.create("Data"); //prints data in a table
+	Table.setColumn("File",list);
+	Table.setColumn("Total Area",circle_area);
+	Table.setColumn("Count",count);
+	Table.setColumn("Area Covered",area_covered);
+	Table.setColumn("Avg Size",avg);
+	Table.setColumn("PAC",PAC);
+	Table.setColumn("Cleanliness Level (spheres)",clean);
+	Table.update;
+	saveAs("Results", output + "Data.csv");
+	}
+
